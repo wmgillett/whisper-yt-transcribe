@@ -1,0 +1,7 @@
+# requirements.txt
+# pip install -r requirements.txt
+openai-whisper==v20230314
+#youtube-dl==2021.12.17
+#youtube-dl
+yt-dlp==2023.03.04
+

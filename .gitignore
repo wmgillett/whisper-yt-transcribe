@@ -1,0 +1,5 @@
+.env
+/archive
+.venv
+*.webm
+*.mp4
