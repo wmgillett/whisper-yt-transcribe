@@ -1,5 +1,13 @@
 .env
 /archive
+/data
 .venv
 *.webm
 *.mp4
+*.mp3
+*.xlsx*
+*.csv
+*.mkv
+*.txt
+channel_list_entries.json
+channel_list.json
