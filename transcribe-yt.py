@@ -1,5 +1,5 @@
 # transcribe-yt.py
-# script to use whisper to transcribe a url
+# script to use whisper to transcribe youtube videos
 import re
 import pandas as pd
 import whisper
@@ -31,7 +31,7 @@ class myTextSplitter:
             print(f"Saving sentences to txt file {filename}")
             for sentence in sentences:
                 f.write(sentence + '\n')
-        print("Done saving sentences to txt")
+        print("Done saving sentences to txt file")
 
     
 class myTranscriber:
@@ -39,15 +39,15 @@ class myTranscriber:
         self.model = whisper.load_model(model_size)
 
     # get channel list
-    def get_channel_list(self, channel_url):
+    def get_channel_list(self, channel_url, channel_name):
         options = {
             'extract_flat': True,
         }
         with youtube_dl.YoutubeDL(options) as downloader:
-            print("Getting channel list...")
+            print(f"Getting channel list for {channel_name}...")
             info_dict = downloader.extract_info(channel_url, download=False)
             # save the urls in a txt file
-            filename = 'data/channel_list_urls.txt' 
+            filename = f'data/channel_list_urls-[{channel_name}].txt' 
             print(f"Saving channel list urls to {filename}")
             with open(filename, 'w') as f:
                 for entry in info_dict['entries']:
@@ -55,13 +55,17 @@ class myTranscriber:
             print(f"Done getting channel list and saving to file {filename}")
         return info_dict
     
-    def transcribe_channel(self, channel_url):
-        info_dict = self.get_channel_list(channel_url)
+    # transcribe all videos in a channel
+    def transcribe_channel(self, channel_url, channel_name):
+        info_dict = self.get_channel_list(channel_url, channel_name)
         limit = 60
         count = 0
         # Load the processed video URLs from the file
         processed_videos = set()
         processed_videos_filename = 'data/processed-video-urls.txt'
+        # check if file exists and create if not
+        if not os.path.isfile(processed_videos_filename):
+            open(processed_videos_filename, 'w').close()
         with open(processed_videos_filename, 'r') as file:
             for line in file:
                 processed_videos.add(line.strip())
@@ -81,6 +85,8 @@ class myTranscriber:
                     print(f"Error occurred during transcription of video: {video_url}")
                     print(f"Error message: {str(e)}")
                     continue
+
+    # get video metadata
     def get_video_metadata(self, url):
         print("Getting video metadata...")
         options = {}
@@ -93,6 +99,12 @@ class myTranscriber:
                 'uploader': info_dict.get('uploader'),
                 'upload_date': info_dict.get('upload_date'),
                 'duration': info_dict.get('duration'),
+                'view_count': info_dict.get('view_count'),
+                'like_count': info_dict.get('like_count'),
+                'id': info_dict.get('id'),
+                'categories': info_dict.get('categories'),
+                'tags': info_dict.get('tags'),
+                
                 # Add more fields as needed
             }
         print("Done getting video metadata")
@@ -134,24 +146,41 @@ class myTranscriber:
             # Get video metadata and append to dataframe
             metadata = self.get_video_metadata(url)
             date = metadata['upload_date']
+            id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
             # Save the modified dataframe as txt file
-            return splitter.save_as_txt(f'data/output/{prefix}_{date}_{title}.txt', metadata)
+            return splitter.save_as_txt(f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{model}].txt', metadata)
 
         
         except Exception as e:
             print(f"Error occurred during transcription of video: {url}")
             print(f"Error message: {str(e)}")
             return None
-    
+
+# specify model
+# english models
+#model = "tiny.en"    
+#model = "base.en"    
+#model = "small.en"
+model = "medium.en"
+# multi-lingual models
+#model = "large.v1"
+#model = "large.v2"
+
 # instantiate the transcriber with the whisper model
-transcriber = myTranscriber("base")
+transcriber = myTranscriber(model)
+
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)
 output_path = os.makedirs('data/output', exist_ok=True)
-#channel_list = transcriber.get_channel_list("https://www.youtube.com/@LynGenetThePlan/videos")
-# channel_list = transcriber.transcribe_channel("https://www.youtube.com/@LynGenetThePlan/videos")
-# test with Rickrolling video
-#transcription = transcriber.transcribe_youtube_video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-# test with Lyn Genet video
-transcription = transcriber.transcribe_youtube_video("https://www.youtube.com/watch?v=wGyTC5ygh1w")
+
+# define testing parameters
+channel_url = "https://www.youtube.com/@LynGenetThePlan/videos"
+channel_name = "LynGenetThePlan"
+video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" #Sample Rickroll Video
+#video_url = "https://www.youtube.com/watch?v=wGyTC5ygh1w" #Sample Lyn Genet Plan Video
+
+# specify direct function calls for testing
+#channel_list = transcriber.get_channel_list(channel_url, channel_name)
+transcriptions = transcriber.transcribe_channel(channel_url, channel_name)
+#transcription = transcriber.transcribe_youtube_video(video_url)
