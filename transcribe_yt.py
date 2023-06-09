@@ -56,7 +56,7 @@ class myTranscriber:
         return info_dict
     
     # transcribe all videos in a channel
-    def transcribe_channel(self, channel_url, channel_name):
+    def transcribe_channel(self, channel_url, channel_name, model):
         info_dict = self.get_channel_list(channel_url, channel_name)
         limit = 60
         count = 0
@@ -76,7 +76,7 @@ class myTranscriber:
                     print(f"{count}: Skipping already processed video: {video_url}")
                     continue
                 try:
-                    self.transcribe_youtube_video(video['url'])
+                    self.transcribe_youtube_video(video['url'], model)
                     count += 1
                     # Append the processed video URL to the file
                     with open(processed_videos_filename, 'a') as file:
@@ -134,11 +134,11 @@ class myTranscriber:
         return filename
 
 
-    def transcribe_youtube_video(self, url, fp16=False, n=5, prefix='transcription'):
-        print("Transcribing video...")
+    def transcribe_youtube_video(self, url, model, fp16=False, n=5, prefix='transcription'):
+        print(f"Transcribing video...{url}")
         try:
             filename = self.save_to_mp3(url)
-            print("Transcribing audio...")
+            print(f"Transcribing audio...using model {model}")
             text = self.model.transcribe(filename, fp16=fp16)
             print("Done transcribing audio")
             splitter = myTextSplitter(text, n)
@@ -162,25 +162,25 @@ class myTranscriber:
 #model = "tiny.en"    
 #model = "base.en"    
 #model = "small.en"
-model = "medium.en"
+#model = "medium.en"
 # multi-lingual models
 #model = "large.v1"
 #model = "large.v2"
 
 # instantiate the transcriber with the whisper model
-transcriber = myTranscriber(model)
+#transcriber = myTranscriber(model)
 
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)
 output_path = os.makedirs('data/output', exist_ok=True)
 
 # define testing parameters
-channel_url = "https://www.youtube.com/@LynGenetThePlan/videos"
-channel_name = "LynGenetThePlan"
-video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" #Sample Rickroll Video
+#channel_url = "https://www.youtube.com/@LynGenetThePlan/videos"
+#channel_name = "LynGenetThePlan"
+#video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" #Sample Rickroll Video
 #video_url = "https://www.youtube.com/watch?v=wGyTC5ygh1w" #Sample Lyn Genet Plan Video
 
 # specify direct function calls for testing
-#channel_list = transcriber.get_channel_list(channel_url, channel_name)
-transcriptions = transcriber.transcribe_channel(channel_url, channel_name)
+# channel_list = transcriber.get_channel_list(channel_url, channel_name)
+#transcriptions = transcriber.transcribe_channel(channel_url, channel_name)
 #transcription = transcriber.transcribe_youtube_video(video_url)
