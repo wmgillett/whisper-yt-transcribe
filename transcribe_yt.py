@@ -6,6 +6,9 @@ import whisper
 import yt_dlp as youtube_dl
 import json
 import os
+import warnings
+#warnings.filterwarnings("ignore", category=DeprecationWarning, module='whisper.*')
+warnings.filterwarnings("ignore", module='whisper.*')
 
 class myTextSplitter:
     def __init__(self, text, n):
@@ -16,12 +19,14 @@ class myTextSplitter:
         print("Splitting transcription into sentences")
         if self.text == "":
             raise ValueError("Input text cannot be empty.")
+        print(f"self.text: {self.text}")
+        print(f"First 20 characters of text: {self.text['text'][:20]}")
         sentences = re.split("(?<=[.!?]) +", self.text['text'])
         print(f"Done splitting into sentences (n={len(sentences)})")
         return sentences
 
-    def save_as_txt(self, filename, metadata=None):
-        print("Formatting audio transcription...")
+    def save_as_txt(self, filename, metadata):
+        print(f"Formatting audio transcription...{filename}")
         with open(filename, 'w') as f:
             if metadata is not None:
                 for key, value in metadata.items():
@@ -141,13 +146,18 @@ class myTranscriber:
             print(f"Transcribing audio...using model {model}")
             text = self.model.transcribe(filename, fp16=fp16)
             print("Done transcribing audio")
+            print(f"Transcribed text obect: {text}")
+            # print first 20 characters of text
+            print(f"DEBUG: First 20 characters of transcribed text: {text['text'][:20]}")
             splitter = myTextSplitter(text, n)
             
             # Get video metadata and append to dataframe
             metadata = self.get_video_metadata(url)
-            date = metadata['upload_date']
+            print(f"metadata: {metadata}")
+            date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
+
             # Save the modified dataframe as txt file
             return splitter.save_as_txt(f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{model}].txt', metadata)
 
@@ -157,30 +167,7 @@ class myTranscriber:
             print(f"Error message: {str(e)}")
             return None
 
-# specify model
-# english models
-#model = "tiny.en"    
-#model = "base.en"    
-#model = "small.en"
-#model = "medium.en"
-# multi-lingual models
-#model = "large.v1"
-#model = "large.v2"
-
-# instantiate the transcriber with the whisper model
-#transcriber = myTranscriber(model)
-
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)
 output_path = os.makedirs('data/output', exist_ok=True)
 
-# define testing parameters
-#channel_url = "https://www.youtube.com/@LynGenetThePlan/videos"
-#channel_name = "LynGenetThePlan"
-#video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" #Sample Rickroll Video
-#video_url = "https://www.youtube.com/watch?v=wGyTC5ygh1w" #Sample Lyn Genet Plan Video
-
-# specify direct function calls for testing
-# channel_list = transcriber.get_channel_list(channel_url, channel_name)
-#transcriptions = transcriber.transcribe_channel(channel_url, channel_name)
-#transcription = transcriber.transcribe_youtube_video(video_url)
