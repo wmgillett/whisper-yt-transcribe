@@ -134,7 +134,6 @@ class myTextSplitter:
                 f.write(sentence + '\n')
         print("[save_as_txt] Done saving sentences to txt file")
 
-    
 class myTranscriber:
     def __init__(self, model_size):
         self.model = whisper.load_model(model_size)
