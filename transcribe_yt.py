@@ -17,17 +17,34 @@ class getMetadata:
         options = {
             'extract_flat': True,
         }
-        with youtube_dl.YoutubeDL(options) as downloader:
-            print(f"[get_channel_list] Getting channel list for {channel_name}...")
-            info_dict = downloader.extract_info(channel_url, download=False)
-            # save the urls in a txt file
-            filename = f'data/channel_list_urls-[{channel_name}].txt' 
-            print(f"[get_channel_list] Saving channel list urls to {filename}")
-            with open(filename, 'w') as f:
-                for entry in info_dict['entries']:
-                    f.write(entry['url'] + '\n')
-            print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
-        return info_dict
+        try:
+            with youtube_dl.YoutubeDL(options) as downloader:
+                print(f"[get_channel_list] Getting channel list for {channel_name}...")
+                info_dict = downloader.extract_info(channel_url, download=False)
+                # save the urls in a txt file
+                filename = f'data/channel_list_urls-[{channel_name}].txt' 
+                print(f"[get_channel_list] Saving channel list urls to {filename}")
+                #print(f"[get_channel_list] info_dict: {info_dict}")
+                json_string = json.dumps(info_dict, indent=4)
+                print(f"DEBUG: json_string: {json_string[440000:489999]}")
+                with open(filename, 'w') as f:
+                    for entry in info_dict['entries']:
+                        f.write(entry['url'] + '\n')
+                print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
+            return info_dict
+        # capture DownloadError exception
+        except youtube_dl.utils.DownloadError as e:
+            print(f"[get_channel_list] Download Error occurred during channel list generation for {channel_name}")
+            print(f"[get_channel_list] Download Error message: {str(e)}")
+            # get type of error 
+            print(f"[get_channel_list] Error type: {type(e)}")
+            return None
+        except Exception as e:
+            print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
+            print(f"[get_channel_list] Error message: {str(e)}")
+            # get type of error 
+            print(f"[get_channel_list] Error type: {type(e)}")
+            return None
 
     # get video metadata
     def get_video_metadata(self, url):
