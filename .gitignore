@@ -9,5 +9,4 @@
 *.csv
 *.mkv
 *.txt
-channel_list_entries.json
-channel_list.json
+__pycache__/
