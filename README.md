@@ -1,24 +1,36 @@
-# YouTube (Whisper) Transcriber
+# Whisper-YT-Transcriber
+[![blog post shield](https://img.shields.io/static/v1?label=&message=Blog%20post&color=gray&style=for-the-badge&logo=openai&link=https://openai.com/blog/whisper)](https://openai.com/blog/whisper)
+[![repository shield](https://img.shields.io/static/v1?label=&message=Whisper%20Repo&color=gray&style=for-the-badge&logo=github&link=https://github.com/openai/whisper)](https://github.com/openai/whisper)
+[![paper shield](https://img.shields.io/static/v1?label=&message=Paper&color=gray&style=for-the-badge&logo=openai&link=https://cdn.openai.com/papers/whisper.pdf)](https://cdn.openai.com/papers/whisper.pdf)
+[![model shield](https://img.shields.io/static/v1?label=&message=Model%20Variants&color=gray&style=for-the-badge&link=https://github.com/openai/whisper#available-models-and-languages)](https://github.com/openai/whisper#available-models-and-languages)
 
-This project is designed to transcribe YouTube videos using the new Whisper Speech to Text model from OpenAI. It provides functionality to transcribe an individual video or all the videos from a YouTube channel. It leverages the `yt_dlp` library for downloading YouTube content and extracts audio from it, which is then transcribed using the `whisper` library.
+Whisper-YT-Transcriber is a Python-based CLI tool that uses the Whisper ASR model from OpenAI to transcribe YouTube videos. This tool can be used to transcribe an individual YouTube video or a complete YouTube channel. The tool integrates the video metadata with the generated transcriptions into .txt files, which are organized by the video metadata.
+
+The performance of the Whisper Model is quite [remarkable](https://arxiv.org/pdf/2212.04356.pdf) and because it is open-source - there are no licensing fees.  The models run locally.
+
+There are five model sizes, four with English-only versions, offering speed and accuracy tradeoffs. Below is a comparison chart from [Whisper's Docmentation](https://github.com/openai/whisper/blob/main/README.md?plain=1).  You can see rhe smaller tier models (tiny and base) use a fraction of the memory and are 8 to 32 times faster compared to the largest two tiers.
 
 
-# TranscribeYT
-TranscribeYT is a Python-based tool that uses the Whisper ASR model from OpenAI for the purpose of transcribing YouTube videos. This tool can be used to either transcribe an individual YouTube video or a whole YouTube channel. The tool integrates the video metadata with the generated transcriptions into .txt files, which are organized by the video metadata.
+|  Size  | Parameters | English-only model | Multilingual model | Required VRAM | Relative speed |
+|:------:|:----------:|:------------------:|:------------------:|:-------------:|:--------------:|
+|  tiny  |    39 M    |     `tiny.en`      |       `tiny`       |     ~1 GB     |      ~32x      |
+|  base  |    74 M    |     `base.en`      |       `base`       |     ~1 GB     |      ~16x      |
+| small  |   244 M    |     `small.en`     |      `small`       |     ~2 GB     |      ~6x       |
+| medium |   769 M    |    `medium.en`     |      `medium`      |     ~5 GB     |      ~2x       |
+| large  |   1550 M   |        N/A         |   `large.V1,V2`    |    ~10 GB     |       1x       |
 
-The performance of the Whisper Model is quite remarkable [add references...] and because it is open-source - there are no licensing fees.  The models run locally.
 
 ## Dependencies
 
 - Python 3.7+
-- python packages:
+- Python packages:
     - yt_dlp
     - whisper
     - pandas
-- pytest (for testing)
+    - pytest (for testing)
 
 ## System Requirements
-The Server memory and CPU requirements depend on the Whisper model used and the size of the video files being transcribed.  We recommend testing the system with smaller models (tiny.en, small.en, base.en) and shorter video files ( < 15 minutes) to guage system demand.  Before trying larger models and longer videos.   
+The Server memory and CPU requirements depend on the Whisper model used and the size of the video files being transcribed.  We recommend testing the system with smaller models (tiny.en, small.en, base.en) and shorter video files ( < 15 minutes) to guage system demand before trying larger models and longer videos.   
 
 ## Installation
 
@@ -33,24 +45,33 @@ cd youtube-transcriber
 pip install -r requirements.txt
 ```
 ## Quick Start
-### To get a list of videos in a YouTube channel:
+### To get a list of videos in a YouTube channel use one of the:
 ``` bash
+# using fill command
 python main.py list CHANNEL_URL CHANNEL_NAME
+# using alias
+python main.py l CHANNEL_URL CHANNEL_NAME
 ```
 ### To transcribe all videos in a YouTube channel:
 ``` bash
+# using full command
 python main.py transcribe_channel CHANNEL_URL CHANNEL_NAME --model MODEL_NAME
+# using alias
+python main.py tc CHANNEL_URL CHANNEL_NAME -m MODEL_NAME
 ```
 ### To transcribe a single YouTube video, use the following command:
 ``` bash
-python main.py transcribe_video VIDEO_URL --model 
+# using full command
+python main.py transcribe_video VIDEO_URL --model MODEL_NAME
+# using alias
+python main.py tv VIDEO_URL -m MODEL_NAME
 ```
 ### Whisper Model Options
 The Whisper 'base.en' model is defined as the default. You can specify a different model using the --model option.
 
 Supported --model values
 * English: `[tiny.en, base.en, small.en, medium.en]`
-* Multi-lingual: `[base, medium, large.v1, large.v2]`
+* Multi-lingual: `[tiny, base, small, medium, large.v1, large.v2]`
 
 `Note:` the first time you run this, the specified model is downloaded - which for small models is fairly quick.  The downloaded model is stored locally can be accessed by subsequent runs without downloading.
 
