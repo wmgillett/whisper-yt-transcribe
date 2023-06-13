@@ -13,8 +13,10 @@ from termcolor import colored
 warnings.filterwarnings("ignore", module='whisper.*')
 
 class getMetadata:
+    def __init__(self):
+        self.channel_metadata = {}
     # get channel list
-    def get_channel_list(self, channel_url, channel_name):
+    def get_channel_list(self, channel_url, channel_name, errors):
         options = {
             'extract_flat': True,
         }
@@ -25,26 +27,35 @@ class getMetadata:
                 # save the urls in a txt file
                 filename = f'data/channel_list_urls-[{channel_name}].txt' 
                 print(f"[get_channel_list] Saving channel list urls to {filename}")
-                #print(f"[get_channel_list] info_dict: {info_dict}")
-                json_string = json.dumps(info_dict, indent=4)
-                print(f"DEBUG: json_string: {json_string[440000:489999]}")
+                # SKIP unless debugging
+                #json_string = json.dumps(info_dict, indent=4)
+                #print(f"DEBUG: json_string: {json_string}")
                 with open(filename, 'w') as f:
                     for entry in info_dict['entries']:
-                        f.write(entry['url'] + '\n')
+                        video_url = entry['url']
+                        self.channel_metadata[video_url] = self.get_video_metadata(video_url)
+                        f.write(video_url + '\n')
                 print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
+                print(f"[get_channel_list] self.channel_metadata: {self.channel_metadata}")
             return info_dict
-        # capture DownloadError exception
+        except KeyError as e:
+            print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
+            msg = "Error related to missing key [entries] likely due to incorrect url for channel"
+            print(f"[get_channel_list] Error message: {str(e)}")
+            print(f"[get_channel_list] Error commentary: {msg}")
+            print(f"[get_channel_list] Error type: {type(e)}")
+            errors[channel_url] = str(e) + "\n" + msg # store error message & commentary in the dictionary
         except youtube_dl.utils.DownloadError as e:
             print(f"[get_channel_list] Download Error occurred during channel list generation for {channel_name}")
             print(f"[get_channel_list] Download Error message: {str(e)}")
-            # get type of error 
             print(f"[get_channel_list] Error type: {type(e)}")
+            errors[channel_url] = str(e) # Store the error message in the dictionary
             return None
         except Exception as e:
             print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
             print(f"[get_channel_list] Error message: {str(e)}")
-            # get type of error 
             print(f"[get_channel_list] Error type: {type(e)}")
+            errors[channel_url] = str(e) # Store the error message in the dictionary
             return None
 
     # get video metadata
@@ -170,7 +181,9 @@ class myTranscriber:
     # transcribe all videos in a channel
     def transcribe_channel(self, channel_url, channel_name):
         print(f"[transcribe_channel] Transcribing channel...{channel_name}")
-        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name)
+        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, self.errors)
+        if info_dict is None:
+            return None
         limit = 60
         count = 0
         for video in info_dict['entries']:
@@ -224,7 +237,12 @@ class myTranscriber:
             splitter = myTextSplitter(text, n)
             
             # Get video metadata and append to dataframe
-            metadata = self.get_metadata.get_video_metadata(url)
+            #metadata = self.get_metadata.get_video_metadata(url)
+            print(f"[transcribe_video] lookup url in saved metadata")
+            metadata = self.get_metadata.channel_metadata.get(url, None)
+            if metadata is None:
+                print(f"[transcribe_video] saved meta not found - retrieving metadata from source")
+                metadata = self.get_metadata.get_video_metadata(url)
             #print(f"DEBUG: metadata: {metadata}")
             date = metadata['upload_date']  
             id = metadata['id']
