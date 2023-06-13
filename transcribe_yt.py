@@ -8,6 +8,7 @@ import json
 import os
 import warnings
 import pprint
+from termcolor import colored
 #warnings.filterwarnings("ignore", category=DeprecationWarning, module='whisper.*')
 warnings.filterwarnings("ignore", module='whisper.*')
 
@@ -122,7 +123,7 @@ class myTextSplitter:
         return sentences
 
     def save_as_txt(self, filename, metadata, model):
-        print(f"[save_as_txt] Formatting audio transcription...{filename}")
+        print(f"[save_as_txt] Formatting metadata and transcription text")
         try:
             with open(filename, 'w') as f:
                 if metadata is not None:
@@ -138,63 +139,84 @@ class myTextSplitter:
                     f.write(f'transcription text:\n')
                     for sentence in sentences:
                         f.write(sentence + '\n')
-            print(f"[save_as_txt] Done saving sentences to txt file {filename}")
+            print(f"[save_as_txt] Done saving metadata and transcription text to file")
             return filename
         except Exception as e:
             print(f"[save_as_txt] Error occurred during processing of transcription: {filename}")
             print(f"[save_as_txt] Error message: {str(e)}")
             # print type of error
             print(f"[save_as_txt] Error type: {type(e)}")
+            self.errors[filename] = str(e) # Store the error message in the dictionary
             return None
 
 class myTranscriber:
-    def __init__(self, model_size):
+    def __init__(self, model_size, errors=None):
         self.model = whisper.load_model(model_size)
+        self.model_size = model_size
+        self.errors = errors if errors is not None else {}
         self.get_metadata = getMetadata()
         self.download_source = downloadSource()
+        self.processed_videos_filename = 'data/processed-video-urls.txt'
+        self.processed_videos = set()
+        self._load_processed_videos()
+    
+    def _load_processed_videos(self):
+        if not os.path.isfile(self.processed_videos_filename):
+            open(self.processed_videos_filename, 'w').close()
+        with open(self.processed_videos_filename, 'r') as file:
+            for line in file:
+                self.processed_videos.add(line.strip())
     
     # transcribe all videos in a channel
-    def transcribe_channel(self, channel_url, channel_name, model):
+    def transcribe_channel(self, channel_url, channel_name):
         print(f"[transcribe_channel] Transcribing channel...{channel_name}")
         info_dict = self.get_metadata.get_channel_list(channel_url, channel_name)
         limit = 60
         count = 0
-        # Load the processed video URLs from the file
-        processed_videos = set()
-        processed_videos_filename = 'data/processed-video-urls.txt'
-        # check if file exists and create if not
-        if not os.path.isfile(processed_videos_filename):
-            open(processed_videos_filename, 'w').close()
-        with open(processed_videos_filename, 'r') as file:
-            for line in file:
-                processed_videos.add(line.strip())
         for video in info_dict['entries']:
             if video is not None and count <= limit:
                 video_url = video['url']
-                if video_url in processed_videos:
+                if video_url in self.processed_videos:
                     print(f"{count}: Skipping already processed video: {video_url}")
                     continue
                 try:
-                    self.transcribe_youtube_video(video['url'], model)
-                    count += 1
-                    # Append the processed video URL to the file
-                    with open(processed_videos_filename, 'a') as file:
-                        file.write(video_url + '\n')
+                    output = self.transcribe_youtube_video(video['url'])
+                    if output is None:
+                        print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
+                    else:
+                        print(f"DEBUG: output: {output}")
+                        count += 1
+                    continue
+                    # Append the processed video URL to the file - not longer 
+                    #with open(processed_videos_filename, 'a') as file:
+                    #    file.write(video_url + '\n')
                 except Exception as e:
                     print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
                     print(f"Error message: {str(e)}")
                     continue
         print(f"[transcribe_channel] Done transcribing channel {channel_name}")
 
+
+
     # transcribe a single video
-    def transcribe_youtube_video(self, url, model, fp16=False, n=5, prefix='transcription'):
+    def transcribe_youtube_video(self, url, fp16=False, n=5, prefix='transcription'):
         try:
+            # check if video has already been processed
+            print(f"[transcribe_video] Checking if video was processed previously...{url}")
+            if url in self.processed_videos:
+                # ask user if they want to reprocess via the command line
+                response = input(f"Video has already processed in a previous run. Do you want to reprocess? (y/n)")
+                if response.lower() != 'y':
+                    print(f"Skipping already processed video")
+                    return f"Skipped video: {url}"
+            
             print(f"[transcribe_video] downloading audio...{url}")
             filename = self.download_source.save_to_mp3(url)
             
             if(filename is None):
+                # TODO: add url to error dictionary
                 return None
-            print(f"[transcribe_video] Transcribing audio...using model {model}")
+            print(f"[transcribe_video] transcribing audio...using model {self.model_size}")
             text = self.model.transcribe(filename, fp16=fp16)
             print("[transcribe_video] Done transcribing audio")
             #print(f"DEBUG: [transcribe_video] Transcribed text obect: {text}")
@@ -207,16 +229,29 @@ class myTranscriber:
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
-            filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{model}].txt'  
+            filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{self.model_size}].txt'  
 
             # Save the modified dataframe as txt file
-            return splitter.save_as_txt(filepath, metadata, model)
+            processed_file = splitter.save_as_txt(filepath, metadata, self.model_size)
+            if(processed_file is None):
+                #TODO: add url to error dictionary
+                return None
+            else:
+                print(f"[transcribe_video] Done transcribing video and saving to file")
+                with open(self.processed_videos_filename, 'a') as file:
+                    file.write(url + '\n')
+                    print(f"[transcribe_video] Done adding video to processed-video-urls file [{self.processed_videos_filename}]"    )
+                return processed_file 
 
         
         except Exception as e:
             print(f"[transcribe_video] Error occurred during transcription of video: {url}")
             print(f"[transcribe_video] Error message: {str(e)}")
+            self.errors[url] = str(e) # Store the error message in the dictionary
             return None
+    def print_errors(self):
+        print(colored("ERRORS:", "red"))
+        pprint.pprint(self.errors)
 
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)

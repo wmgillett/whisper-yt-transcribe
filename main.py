@@ -30,24 +30,38 @@ if __name__ == "__main__":
     parser_transcribe_video.add_argument('-m', '--model', default='base.en', type=str, help=help_model)
 
     args = parser.parse_args()
-    print(f"args: {args}")
-    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en')
+    print(f"[main] args: {args}")
+    # track errors by passing in a dictionary to transcriber
+    errors = {}
+    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors)
     # added in aliases for commands - will not get recognized otherwise
     if args.command == 'list' or args.command == 'l':
-        print(f"[Generating channel list]: [{args.channel_name}] {args.channel_url}")
+        print(f"[main-generating channel list]: [{args.channel_name}] {args.channel_url}")
         transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name)
-        print(f"[Generating channel list]: complete")
+        if len(errors) > 0:
+            print(f"[main-generating channel list]: complete - errors reported")
+        else:
+            print(f"[main-generating channel list]: complete")
     elif args.command == 'transcribe_channel' or args.command == 'tc':
-        print(f"[Transcribing channel]: {args.channel_url}")
-        print(f"[Transcribing channel]: {args}")
-        print(f"[Transcribing channel]: {args.model}")
-        transcriber.transcribe_channel(args.channel_url, args.channel_name, args.model)
-        print(f"[Transcribing channel]: complete")
+        print(f"[main-transcribing channel]: {args.channel_url}")
+        print(f"[main-transcribing channel]: {args}")
+        print(f"[main-transcribing channel]: {args.model}")
+        #transcriber.transcribe_channel(args.channel_url, args.channel_name, args.model)
+        transcriber.transcribe_channel(args.channel_url, args.channel_name)
+        if len(errors) > 0:
+            print(f"[main-transcribing channel]: complete - errors reported")
+        else:
+            print(f"[main-transcribing channel]: complete")
     elif args.command == 'transcribe_video' or args.command == 'tv':
-        print(f"[Transcribing video]: {args.video_url}")
-        print(f"[Transcribing video]: {args}")
-        transcriber.transcribe_youtube_video(args.video_url, args.model)
-        print(f"[Transcribing video]: complete")
+        print(f"[main-transcribing video]: {args.video_url}")
+        print(f"[main-transcribing video]: {args}")
+        transcriber.transcribe_youtube_video(args.video_url)
+        if len(errors) > 0:
+            print(f"[main-transcribing video]: complete - errors reported")
+        else:
+            print(f"[main-transcribing video]: complete")
     else:
-        print(f"Unknown command: {args.command}")
+        print(f"main-unknown command: {args.command}")
         parser.print_help()
+    if len(errors) > 0:
+        transcriber.print_errors()
