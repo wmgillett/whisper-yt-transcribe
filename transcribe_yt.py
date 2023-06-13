@@ -121,20 +121,32 @@ class myTextSplitter:
         print(f"[split_into_sentences] Done splitting into sentences (n={len(sentences)})")
         return sentences
 
-    def save_as_txt(self, filename, metadata):
+    def save_as_txt(self, filename, metadata, model):
         print(f"[save_as_txt] Formatting audio transcription...{filename}")
-        with open(filename, 'w') as f:
-            if metadata is not None:
-                for key, value in metadata.items():
-                    f.write(f'{key}: {value}\n')
-                f.write('\n')
-            sentences = self.split_into_sentences()
-            print(f"[save_as_txt] Saving sentences to txt file {filename}")
-            for sentence in sentences:
-                f.write(sentence + '\n')
-        print("[save_as_txt] Done saving sentences to txt file")
+        try:
+            with open(filename, 'w') as f:
+                if metadata is not None:
+                    for key, value in metadata.items():
+                        f.write(f'{key}: {value}\n')
+                    f.write('\n')
+                sentences = self.split_into_sentences()
+                if sentences is None:
+                    return None
+                else:
+                    print(f"[save_as_txt] Saving sentences to txt file {filename}")
+                    f.write(f'transcription model: {model}\n')
+                    f.write(f'transcription text:\n')
+                    for sentence in sentences:
+                        f.write(sentence + '\n')
+            print(f"[save_as_txt] Done saving sentences to txt file {filename}")
+            return filename
+        except Exception as e:
+            print(f"[save_as_txt] Error occurred during processing of transcription: {filename}")
+            print(f"[save_as_txt] Error message: {str(e)}")
+            # print type of error
+            print(f"[save_as_txt] Error type: {type(e)}")
+            return None
 
-    
 class myTranscriber:
     def __init__(self, model_size):
         self.model = whisper.load_model(model_size)
@@ -195,9 +207,10 @@ class myTranscriber:
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
+            filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{model}].txt'  
 
             # Save the modified dataframe as txt file
-            return splitter.save_as_txt(f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{model}].txt', metadata)
+            return splitter.save_as_txt(filepath, metadata, model)
 
         
         except Exception as e:
