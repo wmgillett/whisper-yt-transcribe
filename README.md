@@ -45,9 +45,9 @@ cd youtube-transcriber
 pip install -r requirements.txt
 ```
 ## Quick Start
-### To get a list of videos in a YouTube channel use one of the:
+### To get a list of videos in a YouTube channel:
 ``` bash
-# using fill command
+# using full command
 python main.py list CHANNEL_URL CHANNEL_NAME
 # using alias
 python main.py l CHANNEL_URL CHANNEL_NAME
@@ -59,14 +59,14 @@ python main.py transcribe_channel CHANNEL_URL CHANNEL_NAME --model MODEL_NAME
 # using alias
 python main.py tc CHANNEL_URL CHANNEL_NAME -m MODEL_NAME
 ```
-### To transcribe a single YouTube video, use the following command:
+### To transcribe a single YouTube video:
 ``` bash
 # using full command
 python main.py transcribe_video VIDEO_URL --model MODEL_NAME
 # using alias
 python main.py tv VIDEO_URL -m MODEL_NAME
 ```
-### Whisper Model Options
+## Whisper Model Options
 The Whisper 'base.en' model is defined as the default. You can specify a different model using the --model option.
 
 Supported --model values
@@ -75,7 +75,7 @@ Supported --model values
 
 `Note:` the first time you run this, the specified model is downloaded - which for small models is fairly quick.  The downloaded model is stored locally can be accessed by subsequent runs without downloading.
 
-### File Structure
+## File Structure
 The project is organized as follows:
 
 * `main.py`: The entry point of the application.
