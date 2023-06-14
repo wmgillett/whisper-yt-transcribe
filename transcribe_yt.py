@@ -14,9 +14,16 @@ warnings.filterwarnings("ignore", module='whisper.*')
 
 class getMetadata:
     def __init__(self):
+    #def __init__(self, errors=None, output=None):    
         self.channel_metadata = {}
+    #    self.errors = errors if errors is not None else {}
+    #    self.output = output if output is not None else {}
+
     # get channel list
-    def get_channel_list(self, channel_url, channel_name, errors):
+    def get_channel_list(self, channel_url, channel_name, errors=None, output=None):
+    #def get_channel_list(self, channel_url, channel_name):
+        errors = errors if errors is not None else {}
+        output = output if output is not None else {}
         options = {
             'extract_flat': True,
         }
@@ -28,15 +35,19 @@ class getMetadata:
                 filename = f'data/channel_list_urls-[{channel_name}].txt' 
                 print(f"[get_channel_list] Saving channel list urls to {filename}")
                 # SKIP unless debugging
-                #json_string = json.dumps(info_dict, indent=4)
-                #print(f"DEBUG: json_string: {json_string}")
+                json_string = json.dumps(info_dict, indent=4)
+                print(f"DEBUG: json_string: {json_string}")
+                output[channel_url] = filename
+                print(f"[get_channel_list] DEBUG: output: {output}")
                 with open(filename, 'w') as f:
                     for entry in info_dict['entries']:
                         video_url = entry['url']
                         self.channel_metadata[video_url] = self.get_video_metadata(video_url)
                         f.write(video_url + '\n')
                 print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
-                print(f"[get_channel_list] self.channel_metadata: {self.channel_metadata}")
+                #print(f"[get_channel_list] DEBUG self.channel_metadata: {self.channel_metadata}")
+                # add url to output dictionary
+
             return info_dict
         except KeyError as e:
             print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
@@ -62,23 +73,30 @@ class getMetadata:
     def get_video_metadata(self, url):
         print(f"[get_video_metadata] Starting process...{url}")
         options = {}
-        with youtube_dl.YoutubeDL(options) as downloader:
-            info_dict = downloader.extract_info(url, download=False)
-            metadata = {
-                'url': url,
-                'title': info_dict.get('title'),
-                'description': info_dict.get('description'),
-                'uploader': info_dict.get('uploader'),
-                'upload_date': info_dict.get('upload_date'),
-                'duration': info_dict.get('duration'),
-                'view_count': info_dict.get('view_count'),
-                'like_count': info_dict.get('like_count'),
-                'id': info_dict.get('id'),
-                'categories': info_dict.get('categories'),
-                'tags': info_dict.get('tags'),
-                
-                # Add more fields as needed
-            }
+        try:
+            with youtube_dl.YoutubeDL(options) as downloader:
+                info_dict = downloader.extract_info(url, download=False)
+                metadata = {
+                    'url': url,
+                    'title': info_dict.get('title'),
+                    'description': info_dict.get('description'),
+                    'uploader': info_dict.get('uploader'),
+                    'upload_date': info_dict.get('upload_date'),
+                    'duration': info_dict.get('duration'),
+                    'view_count': info_dict.get('view_count'),
+                    'like_count': info_dict.get('like_count'),
+                    'id': info_dict.get('id'),
+                    'categories': info_dict.get('categories'),
+                    'tags': info_dict.get('tags'),
+                    
+                    # Add more fields as needed
+                }
+        except Exception as e:
+            print(f"[get_video_metadata] Error occurred during metadata retrieval for {url}")
+            print(f"[get_video_metadata] Error message: {str(e)}")
+            print(f"[get_video_metadata] Error type: {type(e)}")
+            self.errors[url] = str(e) # Store the error message in the dictionary
+            return None
         print("[get_video_metadata] Done getting video metadata")
         return metadata
     
@@ -161,10 +179,11 @@ class myTextSplitter:
             return None
 
 class myTranscriber:
-    def __init__(self, model_size, errors=None):
+    def __init__(self, model_size, errors=None, output=None):
         self.model = whisper.load_model(model_size)
         self.model_size = model_size
         self.errors = errors if errors is not None else {}
+        self.output = output if output is not None else {}
         self.get_metadata = getMetadata()
         self.download_source = downloadSource()
         self.processed_videos_filename = 'data/processed-video-urls.txt'
@@ -181,7 +200,7 @@ class myTranscriber:
     # transcribe all videos in a channel
     def transcribe_channel(self, channel_url, channel_name):
         print(f"[transcribe_channel] Transcribing channel...{channel_name}")
-        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, self.errors)
+        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, self.errors, self.output)
         if info_dict is None:
             return None
         limit = 60
@@ -190,19 +209,18 @@ class myTranscriber:
             if video is not None and count <= limit:
                 video_url = video['url']
                 if video_url in self.processed_videos:
-                    print(f"{count}: Skipping already processed video: {video_url}")
+                    count += 1
+                    print(f"[transcribe_channel] {colored(f'#{count}:', 'blue')} Skipping already processed video: {video_url}")
                     continue
                 try:
-                    output = self.transcribe_youtube_video(video['url'])
-                    if output is None:
+                    result = self.transcribe_youtube_video(video['url'])
+                    if result is None:
                         print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
                     else:
-                        print(f"DEBUG: output: {output}")
+                        print(f"DEBUG: transcribe result: {result}")
                         count += 1
+                        print(f"[transcribe_channel] {colored(f'#{count}:', 'blue')} Completed processing video: {video_url}")
                     continue
-                    # Append the processed video URL to the file - not longer 
-                    #with open(processed_videos_filename, 'a') as file:
-                    #    file.write(video_url + '\n')
                 except Exception as e:
                     print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
                     print(f"Error message: {str(e)}")
@@ -229,7 +247,7 @@ class myTranscriber:
             if(filename is None):
                 # TODO: add url to error dictionary
                 return None
-            print(f"[transcribe_video] transcribing audio...using model {self.model_size}")
+            print(f"[transcribe_video] transcribing audio...using model: {colored(self.model_size, 'blue')}")
             text = self.model.transcribe(filename, fp16=fp16)
             print("[transcribe_video] Done transcribing audio")
             #print(f"DEBUG: [transcribe_video] Transcribed text obect: {text}")
@@ -243,7 +261,6 @@ class myTranscriber:
             if metadata is None:
                 print(f"[transcribe_video] saved meta not found - retrieving metadata from source")
                 metadata = self.get_metadata.get_video_metadata(url)
-            #print(f"DEBUG: metadata: {metadata}")
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
@@ -259,6 +276,8 @@ class myTranscriber:
                 with open(self.processed_videos_filename, 'a') as file:
                     file.write(url + '\n')
                     print(f"[transcribe_video] Done adding video to processed-video-urls file [{self.processed_videos_filename}]"    )
+                # add url to output dictionary
+                self.output[url] = filepath
                 return processed_file 
 
         
@@ -270,6 +289,10 @@ class myTranscriber:
     def print_errors(self):
         print(colored("ERRORS:", "red"))
         pprint.pprint(self.errors)
+    
+    def print_output(self):
+        print(colored("OUTPUT:", "blue"))
+        pprint.pprint(self.output)
 
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)

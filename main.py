@@ -7,7 +7,7 @@
     # python main.py transcribe_video VIDEO_URL --model medium.en
 import argparse
 from transcribe_yt import myTranscriber, getMetadata, downloadSource
-
+from termcolor import colored
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
     subparsers = parser.add_subparsers(dest='command')
@@ -33,11 +33,12 @@ if __name__ == "__main__":
     print(f"[main] args: {args}")
     # track errors by passing in a dictionary to transcriber
     errors = {}
-    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors)
+    output = {}
+    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors, output)
     # added in aliases for commands - will not get recognized otherwise
     if args.command == 'list' or args.command == 'l':
         print(f"[main-generating channel list]: [{args.channel_name}] {args.channel_url}")
-        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name)
+        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
         if len(errors) > 0:
             print(f"[main-generating channel list]: complete - errors reported")
         else:
@@ -63,5 +64,10 @@ if __name__ == "__main__":
     else:
         print(f"main-unknown command: {args.command}")
         parser.print_help()
+    if len(output) > 0:
+        transcriber.print_output()
+    else:
+        print(f"{colored('Output: ', 'blue')} None")
     if len(errors) > 0:
         transcriber.print_errors()
+
