@@ -14,9 +14,16 @@ warnings.filterwarnings("ignore", module='whisper.*')
 
 class getMetadata:
     def __init__(self):
+    #def __init__(self, errors=None, output=None):    
         self.channel_metadata = {}
+    #    self.errors = errors if errors is not None else {}
+    #    self.output = output if output is not None else {}
+
     # get channel list
-    def get_channel_list(self, channel_url, channel_name, errors, output):
+    def get_channel_list(self, channel_url, channel_name, errors=None, output=None):
+    #def get_channel_list(self, channel_url, channel_name):
+        errors = errors if errors is not None else {}
+        output = output if output is not None else {}
         options = {
             'extract_flat': True,
         }
@@ -28,9 +35,10 @@ class getMetadata:
                 filename = f'data/channel_list_urls-[{channel_name}].txt' 
                 print(f"[get_channel_list] Saving channel list urls to {filename}")
                 # SKIP unless debugging
-                #json_string = json.dumps(info_dict, indent=4)
-                #print(f"DEBUG: json_string: {json_string}")
+                json_string = json.dumps(info_dict, indent=4)
+                print(f"DEBUG: json_string: {json_string}")
                 output[channel_url] = filename
+                print(f"[get_channel_list] DEBUG: output: {output}")
                 with open(filename, 'w') as f:
                     for entry in info_dict['entries']:
                         video_url = entry['url']
@@ -65,23 +73,30 @@ class getMetadata:
     def get_video_metadata(self, url):
         print(f"[get_video_metadata] Starting process...{url}")
         options = {}
-        with youtube_dl.YoutubeDL(options) as downloader:
-            info_dict = downloader.extract_info(url, download=False)
-            metadata = {
-                'url': url,
-                'title': info_dict.get('title'),
-                'description': info_dict.get('description'),
-                'uploader': info_dict.get('uploader'),
-                'upload_date': info_dict.get('upload_date'),
-                'duration': info_dict.get('duration'),
-                'view_count': info_dict.get('view_count'),
-                'like_count': info_dict.get('like_count'),
-                'id': info_dict.get('id'),
-                'categories': info_dict.get('categories'),
-                'tags': info_dict.get('tags'),
-                
-                # Add more fields as needed
-            }
+        try:
+            with youtube_dl.YoutubeDL(options) as downloader:
+                info_dict = downloader.extract_info(url, download=False)
+                metadata = {
+                    'url': url,
+                    'title': info_dict.get('title'),
+                    'description': info_dict.get('description'),
+                    'uploader': info_dict.get('uploader'),
+                    'upload_date': info_dict.get('upload_date'),
+                    'duration': info_dict.get('duration'),
+                    'view_count': info_dict.get('view_count'),
+                    'like_count': info_dict.get('like_count'),
+                    'id': info_dict.get('id'),
+                    'categories': info_dict.get('categories'),
+                    'tags': info_dict.get('tags'),
+                    
+                    # Add more fields as needed
+                }
+        except Exception as e:
+            print(f"[get_video_metadata] Error occurred during metadata retrieval for {url}")
+            print(f"[get_video_metadata] Error message: {str(e)}")
+            print(f"[get_video_metadata] Error type: {type(e)}")
+            self.errors[url] = str(e) # Store the error message in the dictionary
+            return None
         print("[get_video_metadata] Done getting video metadata")
         return metadata
     
@@ -246,7 +261,6 @@ class myTranscriber:
             if metadata is None:
                 print(f"[transcribe_video] saved meta not found - retrieving metadata from source")
                 metadata = self.get_metadata.get_video_metadata(url)
-            #print(f"DEBUG: metadata: {metadata}")
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')

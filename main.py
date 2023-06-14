@@ -38,7 +38,7 @@ if __name__ == "__main__":
     # added in aliases for commands - will not get recognized otherwise
     if args.command == 'list' or args.command == 'l':
         print(f"[main-generating channel list]: [{args.channel_name}] {args.channel_url}")
-        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name)
+        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
         if len(errors) > 0:
             print(f"[main-generating channel list]: complete - errors reported")
         else:
