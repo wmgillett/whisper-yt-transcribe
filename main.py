@@ -8,6 +8,12 @@
 import argparse
 from transcribe_yt import myTranscriber, getMetadata, downloadSource
 from termcolor import colored
+def list_channel(args, transcriber, errors, output):
+        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
+def transcribe_channel(args, transcriber):
+        transcriber.transcribe_channel(args.channel_url, args.channel_name)
+def transcribe_video(args, transcriber):
+        transcriber.transcribe_youtube_video(args.video_url)        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
     subparsers = parser.add_subparsers(dest='command')
@@ -35,39 +41,27 @@ if __name__ == "__main__":
     errors = {}
     output = {}
     transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors, output)
-    # added in aliases for commands - will not get recognized otherwise
-    if args.command == 'list' or args.command == 'l':
-        print(f"[main-generating channel list]: [{args.channel_name}] {args.channel_url}")
-        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
-        if len(errors) > 0:
-            print(f"[main-generating channel list]: complete - errors reported")
+    # create data dictionary of command to function mapping
+    command_to_function = {
+        'list': list_channel,
+        'l': list_channel,
+        'transcribe_channel': transcribe_channel,
+        'tc': transcribe_channel,
+        'transcribe_video': transcribe_video,
+        'tv': transcribe_video
+        }
+    func = command_to_function.get(args.command)
+    if func:
+        calling_func = func.__name__
+
+        if calling_func == 'list_channel':
+            func(args, transcriber, errors, output)
         else:
-            print(f"[main-generating channel list]: complete")
-    elif args.command == 'transcribe_channel' or args.command == 'tc':
-        print(f"[main-transcribing channel]: {args.channel_url}")
-        print(f"[main-transcribing channel]: {args}")
-        print(f"[main-transcribing channel]: {args.model}")
-        #transcriber.transcribe_channel(args.channel_url, args.channel_name, args.model)
-        transcriber.transcribe_channel(args.channel_url, args.channel_name)
-        if len(errors) > 0:
-            print(f"[main-transcribing channel]: complete - errors reported")
-        else:
-            print(f"[main-transcribing channel]: complete")
-    elif args.command == 'transcribe_video' or args.command == 'tv':
-        print(f"[main-transcribing video]: {args.video_url}")
-        print(f"[main-transcribing video]: {args}")
-        transcriber.transcribe_youtube_video(args.video_url)
-        if len(errors) > 0:
-            print(f"[main-transcribing video]: complete - errors reported")
-        else:
-            print(f"[main-transcribing video]: complete")
-    else:
-        print(f"main-unknown command: {args.command}")
-        parser.print_help()
-    if len(output) > 0:
+             func(args, transcriber)
+        transcriber.print_errors(calling_func)             
         transcriber.print_output()
+
     else:
-        print(f"{colored('Output: ', 'blue')} None")
-    if len(errors) > 0:
-        transcriber.print_errors()
+        print(f"[main] {colored(f'unknown command: ','red')}{args.command}")
+        parser.print_help()   
 

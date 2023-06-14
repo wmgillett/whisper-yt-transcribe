@@ -13,12 +13,8 @@ from termcolor import colored
 warnings.filterwarnings("ignore", module='whisper.*')
 
 class getMetadata:
-    def __init__(self):
-    #def __init__(self, errors=None, output=None):    
+    def __init__(self):   
         self.channel_metadata = {}
-    #    self.errors = errors if errors is not None else {}
-    #    self.output = output if output is not None else {}
-
     # get channel list
     def get_channel_list(self, channel_url, channel_name, errors=None, output=None):
     #def get_channel_list(self, channel_url, channel_name):
@@ -45,8 +41,6 @@ class getMetadata:
                         self.channel_metadata[video_url] = self.get_video_metadata(video_url)
                         f.write(video_url + '\n')
                 print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
-                #print(f"[get_channel_list] DEBUG self.channel_metadata: {self.channel_metadata}")
-                # add url to output dictionary
 
             return info_dict
         except KeyError as e:
@@ -80,6 +74,7 @@ class getMetadata:
                     'url': url,
                     'title': info_dict.get('title'),
                     'description': info_dict.get('description'),
+                    'channel': info_dict.get('channel'),
                     'uploader': info_dict.get('uploader'),
                     'upload_date': info_dict.get('upload_date'),
                     'duration': info_dict.get('duration'),
@@ -286,11 +281,21 @@ class myTranscriber:
             print(f"[transcribe_video] Error message: {str(e)}")
             self.errors[url] = str(e) # Store the error message in the dictionary
             return None
-    def print_errors(self):
+    def print_errors(self, calling_func=None):
+        if len(self.errors) == 0:
+            print(f"[main-{calling_func}]: complete")
+            print(colored("ERRORS:", "green"))
+            print("None")
+            return
+        print(f"[main-{calling_func}]: complete - errors reported")
         print(colored("ERRORS:", "red"))
         pprint.pprint(self.errors)
     
     def print_output(self):
+        if len(self.output) == 0:
+            print(colored("OUTPUT:", "blue"))
+            print("None")
+            return
         print(colored("OUTPUT:", "blue"))
         pprint.pprint(self.output)
 
