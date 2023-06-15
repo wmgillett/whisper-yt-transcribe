@@ -8,13 +8,45 @@
 import argparse
 from transcribe_yt import myTranscriber, getMetadata, downloadSource
 from termcolor import colored
-def list_channel(args, transcriber, errors, output):
-        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
-def transcribe_channel(args, transcriber):
-        transcriber.transcribe_channel(args.channel_url, args.channel_name)
-def transcribe_video(args, transcriber):
-        transcriber.transcribe_youtube_video(args.video_url)        
-if __name__ == "__main__":
+import logging
+import os
+from utils import output_errors, output_output
+from dotenv import load_dotenv
+load_dotenv()
+def main():
+    log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()  # get log level from environment variable, default to 'DEBUG' if not found
+    numeric_level = getattr(logging, log_level, None)
+    if not isinstance(numeric_level, int):
+        raise ValueError(f'Invalid log level: {log_level}')
+    log_format = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    print(f"log_format: {log_format}")
+    logging.basicConfig(
+        format=log_format,
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        level=numeric_level
+    )
+    logger = logging.getLogger(__name__)
+    # Create file handler which logs info messages
+    fh = logging.FileHandler('end_run.log')
+    fh.setLevel(logging.INFO)
+
+    # Create formatter and add it to the handler
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+
+    # Add the handlers to the logger
+    logger.addHandler(fh)
+
+    # this code is not working - yt_dlp is still doing verbose logging
+    yt_logger = logging.getLogger('yt_dlp')
+    yt_logger.setLevel(logging.WARNING)
+
+    def list_channel(args, transcriber):
+            transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, transcriber)
+    def transcribe_channel(args, transcriber):
+            transcriber.transcribe_channel(args.channel_url, args.channel_name, transcriber)
+    def transcribe_video(args, transcriber):
+            transcriber.transcribe_youtube_video(args.video_url)        
     parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
     subparsers = parser.add_subparsers(dest='command')
     help_model = '''
@@ -36,11 +68,9 @@ if __name__ == "__main__":
     parser_transcribe_video.add_argument('-m', '--model', default='base.en', type=str, help=help_model)
 
     args = parser.parse_args()
-    print(f"[main] args: {args}")
-    # track errors by passing in a dictionary to transcriber
-    errors = {}
-    output = {}
-    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors, output)
+
+    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en')
+    
     # create data dictionary of command to function mapping
     command_to_function = {
         'list': list_channel,
@@ -51,17 +81,19 @@ if __name__ == "__main__":
         'tv': transcribe_video
         }
     func = command_to_function.get(args.command)
+    logger.debug(f"{func} args: {args}")
     if func:
         calling_func = func.__name__
 
         if calling_func == 'list_channel':
-            func(args, transcriber, errors, output)
+            func(args, transcriber)
         else:
-             func(args, transcriber)
-        transcriber.print_errors(calling_func)             
-        transcriber.print_output()
-
+            func(args, transcriber)
+        output_errors(transcriber.errors, calling_func)
+        output_output(transcriber.output)
     else:
         print(f"[main] {colored(f'unknown command: ','red')}{args.command}")
         parser.print_help()   
 
+if __name__ == "__main__":
+    main()

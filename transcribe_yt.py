@@ -9,63 +9,60 @@ import os
 import warnings
 import pprint
 from termcolor import colored
+import logging
+from utils import handle_error
 #warnings.filterwarnings("ignore", category=DeprecationWarning, module='whisper.*')
 warnings.filterwarnings("ignore", module='whisper.*')
-
+logger = logging.getLogger(__name__)
 class getMetadata:
     def __init__(self):   
         self.channel_metadata = {}
+        
     # get channel list
-    def get_channel_list(self, channel_url, channel_name, errors=None, output=None):
-    #def get_channel_list(self, channel_url, channel_name):
-        errors = errors if errors is not None else {}
-        output = output if output is not None else {}
+    def get_channel_list(self, channel_url, channel_name, transcriber):
+        func = '[get_channel_list]'
         options = {
             'extract_flat': True,
         }
         try:
             with youtube_dl.YoutubeDL(options) as downloader:
-                print(f"[get_channel_list] Getting channel list for {channel_name}...")
+                logger.info(f"{func} Getting channel list for {channel_name}...")
                 info_dict = downloader.extract_info(channel_url, download=False)
                 # save the urls in a txt file
                 filename = f'data/channel_list_urls-[{channel_name}].txt' 
-                print(f"[get_channel_list] Saving channel list urls to {filename}")
-                # SKIP unless debugging
+                logger.info(f"{func} Saving channel list urls to {filename}")
                 json_string = json.dumps(info_dict, indent=4)
-                print(f"DEBUG: json_string: {json_string}")
-                output[channel_url] = filename
-                print(f"[get_channel_list] DEBUG: output: {output}")
+                logger.debug(f"{func} json_string: {json_string}")
+                transcriber.output[channel_url] = filename
+                logger.debug(f"output: {transcriber.output}")
                 with open(filename, 'w') as f:
                     for entry in info_dict['entries']:
                         video_url = entry['url']
-                        self.channel_metadata[video_url] = self.get_video_metadata(video_url)
+                        self.channel_metadata[video_url] = self.get_video_metadata(video_url, transcriber)
                         f.write(video_url + '\n')
-                print(f"[get_channel_list] Done getting channel list and saving to file {filename}")
+                logger.info(f"{func} Done getting channel list and saving to file {filename}")
 
             return info_dict
         except KeyError as e:
-            print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
-            msg = "Error related to missing key [entries] likely due to incorrect url for channel"
-            print(f"[get_channel_list] Error message: {str(e)}")
-            print(f"[get_channel_list] Error commentary: {msg}")
-            print(f"[get_channel_list] Error type: {type(e)}")
-            errors[channel_url] = str(e) + "\n" + msg # store error message & commentary in the dictionary
+            msg = f"""
+            Error occurred during channel list generation for {channel_name}
+            Error related to missing key [entries] likely due to incorrect url for channel"
+            """
+            key = channel_url
+            handle_error(e, func, msg, transcriber.errors, key)
+            return None
         except youtube_dl.utils.DownloadError as e:
-            print(f"[get_channel_list] Download Error occurred during channel list generation for {channel_name}")
-            print(f"[get_channel_list] Download Error message: {str(e)}")
-            print(f"[get_channel_list] Error type: {type(e)}")
-            errors[channel_url] = str(e) # Store the error message in the dictionary
+            msg = f"""
+            Download Error occurred during channel list generation for {channel_name}
+            """
+            key = channel_url
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
-        except Exception as e:
-            print(f"[get_channel_list] Error occurred during channel list generation for {channel_name}")
-            print(f"[get_channel_list] Error message: {str(e)}")
-            print(f"[get_channel_list] Error type: {type(e)}")
-            errors[channel_url] = str(e) # Store the error message in the dictionary
-            return None
-
+        
     # get video metadata
-    def get_video_metadata(self, url):
-        print(f"[get_video_metadata] Starting process...{url}")
+    def get_video_metadata(self, url, transcriber):
+        func = '[get_video_metadata]'
+        logger.info(f"{func} Starting process...{url}")
         options = {}
         try:
             with youtube_dl.YoutubeDL(options) as downloader:
@@ -87,18 +84,20 @@ class getMetadata:
                     # Add more fields as needed
                 }
         except Exception as e:
-            print(f"[get_video_metadata] Error occurred during metadata retrieval for {url}")
-            print(f"[get_video_metadata] Error message: {str(e)}")
-            print(f"[get_video_metadata] Error type: {type(e)}")
-            self.errors[url] = str(e) # Store the error message in the dictionary
+            msg = f"""
+            Error occurred during metadata retrieval for {url}
+            """
+            key = url
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
-        print("[get_video_metadata] Done getting video metadata")
+        logger.info(f"{func} Done getting video metadata")
         return metadata
     
 class downloadSource:
     # download audio from youtube 
-    def download_audio(self, url):
-        print(f"[download_audio] Initiating download with youtube...{url}")
+    def download_audio(self, url, transcriber):
+        func = '[download_audio]'
+        logger.info(f"{func} Initiating download with youtube...{url}")
         options = {
         'outtmpl': 'data/input/%(title)s.%(ext)s',  # Download into 'data/input' directory
         'format': 'bestaudio/best',
@@ -113,22 +112,32 @@ class downloadSource:
             downloader.download([url])
             download_file = downloader.prepare_filename(downloader.extract_info(url, download=False)).replace(".webm", ".mp3")
         if (download_file is None):
-            print("[download_audio] Download failed")
+            logger.error(f"{func} Download failed")
             return None
         else:
-            print("[download_audio] Done downloading")
+            logger.info(f"{func} Done downloading")
             return download_file
 
     # call download source file as mp3 and save to data/input   
-    def save_to_mp3(self, url):
-        print(f"[save-to-mp3] calling download_audio...{url}")
-        filename = self.download_audio(url)
-        if (filename is None):
-            print("[save-to-mp3] Download failed")
+    def save_to_mp3(self, url, transcriber):
+        func = '[save_to_mp3]'
+        logger.info(f"{func} calling download_audio...{url}")
+        try:
+            filename = self.download_audio(url, transcriber)
+        except youtube_dl.utils.DownloadError as e:
+            msg = f"""
+            Error occurred during download of {url}
+            Like bad url or video not available
+            """
+            key = url
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
+        if (filename is None or filename[-2:] == "NA"):
+            raise ValueError(f"{func} unable to download audio file - check url")
         else:
+            logger.info(f"{func} Filename before cleaning: {filename}")
             filename = filename.replace('.m4a', '.mp3')
-            print(f"[save-to-mp3] Complete Filename: {filename}")
+            logger.info(f"{func} Complete Filename: {filename}")
             return filename
 
 class myTextSplitter:
@@ -137,17 +146,18 @@ class myTextSplitter:
         self.n = n
 
     def split_into_sentences(self):
-        print("[split_into_sentences] splitting transcription into sentences")
+        func = '[split_into_sentences]'
+        logging.info(f"{func} splitting transcription into sentences")
         if self.text == "":
             raise ValueError("[split_into_sentences] Input text cannot be empty.")
-        #print(f"DEBUG: self.text: {self.text}")
-        #print(f"DEBUG: First 20 characters of text: {self.text['text'][:20]}")
+        logger.debug(f"{func} self.text[:40]: {self.text['text'][:40]}")
         sentences = re.split("(?<=[.!?]) +", self.text['text'])
-        print(f"[split_into_sentences] Done splitting into sentences (n={len(sentences)})")
+        logger.info(f"{func} Done splitting into sentences (n={len(sentences)})")
         return sentences
 
-    def save_as_txt(self, filename, metadata, model):
-        print(f"[save_as_txt] Formatting metadata and transcription text")
+    def save_as_txt(self, filename, metadata, model, transcriber):
+        func = '[save_as_txt]'
+        logger.info(f"{func} Formatting metadata and transcription text")
         try:
             with open(filename, 'w') as f:
                 if metadata is not None:
@@ -156,29 +166,27 @@ class myTextSplitter:
                     f.write('\n')
                 sentences = self.split_into_sentences()
                 if sentences is None:
-                    return None
+                    raise ValueError("[split_into_sentences] Transcription unable to be processed.")
                 else:
-                    print(f"[save_as_txt] Saving sentences to txt file {filename}")
+                    logger.info(f"{func} Saving sentences to txt file {filename}")
                     f.write(f'transcription model: {model}\n')
                     f.write(f'transcription text:\n')
                     for sentence in sentences:
                         f.write(sentence + '\n')
-            print(f"[save_as_txt] Done saving metadata and transcription text to file")
+            logger.info(f"{func} Done saving metadata and transcription text to file")
             return filename
         except Exception as e:
-            print(f"[save_as_txt] Error occurred during processing of transcription: {filename}")
-            print(f"[save_as_txt] Error message: {str(e)}")
-            # print type of error
-            print(f"[save_as_txt] Error type: {type(e)}")
-            self.errors[filename] = str(e) # Store the error message in the dictionary
+            msg = "Error occurred during processing of transcription"
+            key = filename
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
 
 class myTranscriber:
-    def __init__(self, model_size, errors=None, output=None):
+    def __init__(self, model_size):
         self.model = whisper.load_model(model_size)
         self.model_size = model_size
-        self.errors = errors if errors is not None else {}
-        self.output = output if output is not None else {}
+        self.errors = {}
+        self.output = {}
         self.get_metadata = getMetadata()
         self.download_source = downloadSource()
         self.processed_videos_filename = 'data/processed-video-urls.txt'
@@ -193,9 +201,10 @@ class myTranscriber:
                 self.processed_videos.add(line.strip())
     
     # transcribe all videos in a channel
-    def transcribe_channel(self, channel_url, channel_name):
-        print(f"[transcribe_channel] Transcribing channel...{channel_name}")
-        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, self.errors, self.output)
+    def transcribe_channel(self, channel_url, channel_name, transcriber):
+        func = '[transcribe_channel]'
+        logger.info(f"{func} Transcribing channel...{channel_name}")
+        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, transcriber)
         if info_dict is None:
             return None
         limit = 60
@@ -205,99 +214,80 @@ class myTranscriber:
                 video_url = video['url']
                 if video_url in self.processed_videos:
                     count += 1
-                    print(f"[transcribe_channel] {colored(f'#{count}:', 'blue')} Skipping already processed video: {video_url}")
+                    logger.info(f"{func} {colored(f'#{count}:', 'blue')} Skipping already processed video: {video_url}")
                     continue
                 try:
                     result = self.transcribe_youtube_video(video['url'])
                     if result is None:
-                        print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
+                        logger.error(f"{func} Error occurred during transcription of video: {video_url}")
                     else:
-                        print(f"DEBUG: transcribe result: {result}")
+                        logger.debug(f"{func} transcribe result: {result}")
                         count += 1
-                        print(f"[transcribe_channel] {colored(f'#{count}:', 'blue')} Completed processing video: {video_url}")
+                        logger.info(f"{func} {colored(f'#{count}:', 'blue')} Completed processing video: {video_url}")
                     continue
                 except Exception as e:
-                    print(f"[transcribe_channel] Error occurred during transcription of video: {video_url}")
-                    print(f"Error message: {str(e)}")
+                    
+                    msg = f"{func} Error1 occurred during transcription of video: {video_url}"
+                    key = video_url
+                    handle_error(e, func, msg, self.errors, key)
                     continue
-        print(f"[transcribe_channel] Done transcribing channel {channel_name}")
+        logger.info(f"{func} Done transcribing channel [{channel_name}]")
 
 
 
     # transcribe a single video
     def transcribe_youtube_video(self, url, fp16=False, n=5, prefix='transcription'):
+        func = '[transcribe_video]'
         try:
             # check if video has already been processed
-            print(f"[transcribe_video] Checking if video was processed previously...{url}")
+            logger.info(f"{func} Checking if video was processed previously...{url}")
             if url in self.processed_videos:
                 # ask user if they want to reprocess via the command line
                 response = input(f"Video has already processed in a previous run. Do you want to reprocess? (y/n)")
                 if response.lower() != 'y':
-                    print(f"Skipping already processed video")
+                    logger.info(f"{func} Skipping already processed video")
                     return f"Skipped video: {url}"
             
-            print(f"[transcribe_video] downloading audio...{url}")
-            filename = self.download_source.save_to_mp3(url)
-            
+            logger.info(f"{func} downloading audio...{url}")
+            filename = self.download_source.save_to_mp3(url, self)
+            logger.debug(f"{func} filename: {filename}")
             if(filename is None):
                 # TODO: add url to error dictionary
                 return None
-            print(f"[transcribe_video] transcribing audio...using model: {colored(self.model_size, 'blue')}")
+            logger.info(f"{func} transcribing audio...using model: {colored(self.model_size, 'blue')}")
             text = self.model.transcribe(filename, fp16=fp16)
-            print("[transcribe_video] Done transcribing audio")
-            #print(f"DEBUG: [transcribe_video] Transcribed text obect: {text}")
-            #print(f"DEBUG: [transcribe_video] First 20 characters of transcribed text: {text['text'][:20]}")
+            logger.info(f"{func} Done transcribing audio")
+            logger.debug(f"{func} Transcribed text[:40]: {text['text'][:40]}")
             splitter = myTextSplitter(text, n)
             
             # Get video metadata and append to dataframe
-            #metadata = self.get_metadata.get_video_metadata(url)
-            print(f"[transcribe_video] lookup url in saved metadata")
+            logger.info(f"{func} lookup url in saved metadata")
             metadata = self.get_metadata.channel_metadata.get(url, None)
             if metadata is None:
-                print(f"[transcribe_video] saved meta not found - retrieving metadata from source")
-                metadata = self.get_metadata.get_video_metadata(url)
+                logger.info(f"{func} saved meta not found - retrieving metadata from source")
+                metadata = self.get_metadata.get_video_metadata(url, self)
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
             filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{self.model_size}].txt'  
 
             # Save the modified dataframe as txt file
-            processed_file = splitter.save_as_txt(filepath, metadata, self.model_size)
+            processed_file = splitter.save_as_txt(filepath, metadata, self.model_size, self)
             if(processed_file is None):
                 #TODO: add url to error dictionary
                 return None
             else:
-                print(f"[transcribe_video] Done transcribing video and saving to file")
+                logger.info(f"{func} Done transcribing video and saving to file")
                 with open(self.processed_videos_filename, 'a') as file:
                     file.write(url + '\n')
-                    print(f"[transcribe_video] Done adding video to processed-video-urls file [{self.processed_videos_filename}]"    )
+                    logger.info(f"{func} Done adding video to processed-video-urls file [{self.processed_videos_filename}]"    )
                 # add url to output dictionary
                 self.output[url] = filepath
-                return processed_file 
-
-        
-        except Exception as e:
-            print(f"[transcribe_video] Error occurred during transcription of video: {url}")
-            print(f"[transcribe_video] Error message: {str(e)}")
-            self.errors[url] = str(e) # Store the error message in the dictionary
+                return processed_file
+        except ValueError as e: 
+            msg = "Error occurred processing of transcription of video"
+            handle_error(e, func, msg, self.errors, url)
             return None
-    def print_errors(self, calling_func=None):
-        if len(self.errors) == 0:
-            print(f"[main-{calling_func}]: complete")
-            print(colored("ERRORS:", "green"))
-            print("None")
-            return
-        print(f"[main-{calling_func}]: complete - errors reported")
-        print(colored("ERRORS:", "red"))
-        pprint.pprint(self.errors)
-    
-    def print_output(self):
-        if len(self.output) == 0:
-            print(colored("OUTPUT:", "blue"))
-            print("None")
-            return
-        print(colored("OUTPUT:", "blue"))
-        pprint.pprint(self.output)
 
 # create input and output directories
 input_path = os.makedirs('data/input', exist_ok=True)

@@ -10,3 +10,6 @@
 *.mkv
 *.txt
 __pycache__/
+*.log
+!requirements.txt
+!requirements-dev.txt
