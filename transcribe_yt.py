@@ -19,10 +19,8 @@ class getMetadata:
         self.channel_metadata = {}
         
     # get channel list
-    def get_channel_list(self, channel_url, channel_name, errors=None, output=None):
+    def get_channel_list(self, channel_url, channel_name, transcriber):
         func = '[get_channel_list]'
-        errors = errors if errors is not None else {}
-        output = output if output is not None else {}
         options = {
             'extract_flat': True,
         }
@@ -33,46 +31,36 @@ class getMetadata:
                 # save the urls in a txt file
                 filename = f'data/channel_list_urls-[{channel_name}].txt' 
                 logger.info(f"{func} Saving channel list urls to {filename}")
-                # SKIP unless debugging
                 json_string = json.dumps(info_dict, indent=4)
                 logger.debug(f"{func} json_string: {json_string}")
-                output[channel_url] = filename
-                logger.debug(f"output: {output}")
+                transcriber.output[channel_url] = filename
+                logger.debug(f"output: {transcriber.output}")
                 with open(filename, 'w') as f:
                     for entry in info_dict['entries']:
                         video_url = entry['url']
-                        self.channel_metadata[video_url] = self.get_video_metadata(video_url)
+                        self.channel_metadata[video_url] = self.get_video_metadata(video_url, transcriber)
                         f.write(video_url + '\n')
                 logger.info(f"{func} Done getting channel list and saving to file {filename}")
 
             return info_dict
         except KeyError as e:
-            #logger.error(f"{func} Error occurred during channel list generation for {channel_name}")
             msg = f"""
             Error occurred during channel list generation for {channel_name}
             Error related to missing key [entries] likely due to incorrect url for channel"
             """
             key = channel_url
-            handle_error(e, func, msg, self.errors, key)
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
         except youtube_dl.utils.DownloadError as e:
             msg = f"""
             Download Error occurred during channel list generation for {channel_name}
             """
             key = channel_url
-            errors = errors
-            handle_error(e, func, msg, errors, key)
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
-        except Exception as e:
-            msg = f"""
-            Unknown Error occurred during channel list generation for {channel_name}
-            """
-            key = channel_url
-            handle_error(e, func, msg, self.errors, key)
-            return None
-
+        
     # get video metadata
-    def get_video_metadata(self, url):
+    def get_video_metadata(self, url, transcriber):
         func = '[get_video_metadata]'
         logger.info(f"{func} Starting process...{url}")
         options = {}
@@ -100,14 +88,14 @@ class getMetadata:
             Error occurred during metadata retrieval for {url}
             """
             key = url
-            handle_error(e, func, msg, self.errors, key)
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
         logger.info(f"{func} Done getting video metadata")
         return metadata
     
 class downloadSource:
     # download audio from youtube 
-    def download_audio(self, url):
+    def download_audio(self, url, transcriber):
         func = '[download_audio]'
         logger.info(f"{func} Initiating download with youtube...{url}")
         options = {
@@ -131,31 +119,23 @@ class downloadSource:
             return download_file
 
     # call download source file as mp3 and save to data/input   
-    def save_to_mp3(self, url):
+    def save_to_mp3(self, url, transcriber):
         func = '[save_to_mp3]'
         logger.info(f"{func} calling download_audio...{url}")
         try:
-            filename = self.download_audio(url)
+            filename = self.download_audio(url, transcriber)
         except youtube_dl.utils.DownloadError as e:
             msg = f"""
             Error occurred during download of {url}
             Like bad url or video not available
             """
             key = url
-            handle_error(e, func, msg, self.errors, key)
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
-        except Exception as e:
-            msg = f"""
-            2Error occurred during download of {url}
-            Like bad url or video not available
-            """
-            key = url
-            handle_error(e, func, msg, self.errors, key)
-            return None
-        if (filename is None):
-            logger.error(f"{func} Download failed")
-            return None
+        if (filename is None or filename[-2:] == "NA"):
+            raise ValueError(f"{func} unable to download audio file - check url")
         else:
+            logger.info(f"{func} Filename before cleaning: {filename}")
             filename = filename.replace('.m4a', '.mp3')
             logger.info(f"{func} Complete Filename: {filename}")
             return filename
@@ -175,7 +155,7 @@ class myTextSplitter:
         logger.info(f"{func} Done splitting into sentences (n={len(sentences)})")
         return sentences
 
-    def save_as_txt(self, filename, metadata, model):
+    def save_as_txt(self, filename, metadata, model, transcriber):
         func = '[save_as_txt]'
         logger.info(f"{func} Formatting metadata and transcription text")
         try:
@@ -186,7 +166,7 @@ class myTextSplitter:
                     f.write('\n')
                 sentences = self.split_into_sentences()
                 if sentences is None:
-                    return None
+                    raise ValueError("[split_into_sentences] Transcription unable to be processed.")
                 else:
                     logger.info(f"{func} Saving sentences to txt file {filename}")
                     f.write(f'transcription model: {model}\n')
@@ -198,15 +178,15 @@ class myTextSplitter:
         except Exception as e:
             msg = "Error occurred during processing of transcription"
             key = filename
-            handle_error(e, func, msg, self.errors, key)
+            handle_error(e, func, msg, transcriber.errors, key)
             return None
 
 class myTranscriber:
-    def __init__(self, model_size, errors=None, output=None):
+    def __init__(self, model_size):
         self.model = whisper.load_model(model_size)
         self.model_size = model_size
-        self.errors = errors if errors is not None else {}
-        self.output = output if output is not None else {}
+        self.errors = {}
+        self.output = {}
         self.get_metadata = getMetadata()
         self.download_source = downloadSource()
         self.processed_videos_filename = 'data/processed-video-urls.txt'
@@ -221,10 +201,10 @@ class myTranscriber:
                 self.processed_videos.add(line.strip())
     
     # transcribe all videos in a channel
-    def transcribe_channel(self, channel_url, channel_name):
+    def transcribe_channel(self, channel_url, channel_name, transcriber):
         func = '[transcribe_channel]'
         logger.info(f"{func} Transcribing channel...{channel_name}")
-        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, self.errors, self.output)
+        info_dict = self.get_metadata.get_channel_list(channel_url, channel_name, transcriber)
         if info_dict is None:
             return None
         limit = 60
@@ -246,10 +226,12 @@ class myTranscriber:
                         logger.info(f"{func} {colored(f'#{count}:', 'blue')} Completed processing video: {video_url}")
                     continue
                 except Exception as e:
-                    logger.error(f"{func} Error occurred during transcription of video: {video_url}")
-                    logger.error(f"{func} Error message: {str(e)}")
+                    
+                    msg = f"{func} Error1 occurred during transcription of video: {video_url}"
+                    key = video_url
+                    handle_error(e, func, msg, self.errors, key)
                     continue
-        logger.info(f"{func} Done transcribing channel {channel_name}")
+        logger.info(f"{func} Done transcribing channel [{channel_name}]")
 
 
 
@@ -267,8 +249,8 @@ class myTranscriber:
                     return f"Skipped video: {url}"
             
             logger.info(f"{func} downloading audio...{url}")
-            filename = self.download_source.save_to_mp3(url)
-            
+            filename = self.download_source.save_to_mp3(url, self)
+            logger.debug(f"{func} filename: {filename}")
             if(filename is None):
                 # TODO: add url to error dictionary
                 return None
@@ -279,19 +261,18 @@ class myTranscriber:
             splitter = myTextSplitter(text, n)
             
             # Get video metadata and append to dataframe
-            #metadata = self.get_metadata.get_video_metadata(url)
             logger.info(f"{func} lookup url in saved metadata")
             metadata = self.get_metadata.channel_metadata.get(url, None)
             if metadata is None:
                 logger.info(f"{func} saved meta not found - retrieving metadata from source")
-                metadata = self.get_metadata.get_video_metadata(url)
+                metadata = self.get_metadata.get_video_metadata(url, self)
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
             filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{self.model_size}].txt'  
 
             # Save the modified dataframe as txt file
-            processed_file = splitter.save_as_txt(filepath, metadata, self.model_size)
+            processed_file = splitter.save_as_txt(filepath, metadata, self.model_size, self)
             if(processed_file is None):
                 #TODO: add url to error dictionary
                 return None
@@ -302,9 +283,9 @@ class myTranscriber:
                     logger.info(f"{func} Done adding video to processed-video-urls file [{self.processed_videos_filename}]"    )
                 # add url to output dictionary
                 self.output[url] = filepath
-                return processed_file 
-        except Exception as e:
-            msg = "Error occurred during transcription of video"
+                return processed_file
+        except ValueError as e: 
+            msg = "Error occurred processing of transcription of video"
             handle_error(e, func, msg, self.errors, url)
             return None
 

@@ -18,7 +18,6 @@ def main():
     numeric_level = getattr(logging, log_level, None)
     if not isinstance(numeric_level, int):
         raise ValueError(f'Invalid log level: {log_level}')
-    #logging.basicConfig(level=numeric_level)
     log_format = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     print(f"log_format: {log_format}")
     logging.basicConfig(
@@ -42,10 +41,10 @@ def main():
     yt_logger = logging.getLogger('yt_dlp')
     yt_logger.setLevel(logging.WARNING)
 
-    def list_channel(args, transcriber, errors, output):
-            transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, errors, output)
+    def list_channel(args, transcriber):
+            transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, transcriber)
     def transcribe_channel(args, transcriber):
-            transcriber.transcribe_channel(args.channel_url, args.channel_name)
+            transcriber.transcribe_channel(args.channel_url, args.channel_name, transcriber)
     def transcribe_video(args, transcriber):
             transcriber.transcribe_youtube_video(args.video_url)        
     parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
@@ -69,10 +68,9 @@ def main():
     parser_transcribe_video.add_argument('-m', '--model', default='base.en', type=str, help=help_model)
 
     args = parser.parse_args()
-    # track errors by passing in a dictionary to transcriber
-    errors = {}
-    output = {}
-    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en', errors, output)
+
+    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en')
+    
     # create data dictionary of command to function mapping
     command_to_function = {
         'list': list_channel,
@@ -88,11 +86,9 @@ def main():
         calling_func = func.__name__
 
         if calling_func == 'list_channel':
-            func(args, transcriber, errors, output)
+            func(args, transcriber)
         else:
             func(args, transcriber)
-        #transcriber.print_errors(calling_func)             
-        #transcriber.print_output()
         output_errors(transcriber.errors, calling_func)
         output_output(transcriber.output)
     else:

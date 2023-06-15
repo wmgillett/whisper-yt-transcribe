@@ -56,7 +56,7 @@ def test_get_channel_list(mock_youtube_dl, transcriber, get_metadata):
     # replace with a real channel URL for the test
     channel_url = "https://www.youtube.com/@RickAstleyYT/videos" 
     channel_name = "test_channel"
-    info_dict = get_metadata.get_channel_list(channel_url, channel_name)
+    info_dict = get_metadata.get_channel_list(channel_url, channel_name, transcriber)
     assert info_dict is not None
     assert 'entries' in info_dict
 
@@ -94,7 +94,7 @@ def test_get_video_metadata(mock_youtube_dl, transcriber, get_metadata):
     mock_youtube_dl.return_value.__enter__.return_value = mock_extractor
 
     video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    metadata = get_metadata.get_video_metadata(video_url)
+    metadata = get_metadata.get_video_metadata(video_url, transcriber)
 
     assert metadata is not None
     assert 'url' in metadata
