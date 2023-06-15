@@ -11,9 +11,13 @@ from termcolor import colored
 import logging
 import os
 from utils import output_errors, output_output
+import sys
 from dotenv import load_dotenv
 load_dotenv()
-def main():
+
+
+# setup logging
+def setup_logging():
     log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()  # get log level from environment variable, default to 'DEBUG' if not found
     numeric_level = getattr(logging, log_level, None)
     if not isinstance(numeric_level, int):
@@ -41,19 +45,17 @@ def main():
     yt_logger = logging.getLogger('yt_dlp')
     yt_logger.setLevel(logging.WARNING)
 
-    def list_channel(args, transcriber):
-            transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, transcriber)
-    def transcribe_channel(args, transcriber):
-            transcriber.transcribe_channel(args.channel_url, args.channel_name, transcriber)
-    def transcribe_video(args, transcriber):
-            transcriber.transcribe_youtube_video(args.video_url)        
-    parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
-    subparsers = parser.add_subparsers(dest='command')
+    return logger
+
+def setup_parser():
     help_model = '''
     Specifies Whisper model to use:
     Choices (english): [tiny.en, base.en, small.en, medium.en, large.v1, large.v2],
     Choices (multi-lingual): [base, medium, large.v1, large.v2]
     '''
+    parser = argparse.ArgumentParser(description='Transcribe a YouTube video or channel.')
+    subparsers = parser.add_subparsers(dest='command')
+
     parser_list = subparsers.add_parser('list', aliases=['l'], help='Get a list of videos in a YouTube channel.')
     parser_list.add_argument('channel_url', type=str, help='The URL of the YouTube channel.')
     parser_list.add_argument('channel_name', type=str, help='The name of the YouTube channel.')
@@ -67,10 +69,14 @@ def main():
     parser_transcribe_video.add_argument('video_url', type=str, help='The URL of the YouTube video.')
     parser_transcribe_video.add_argument('-m', '--model', default='base.en', type=str, help=help_model)
 
-    args = parser.parse_args()
+    return parser
 
-    transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en')
-    
+
+def main():
+    logger = setup_logging()
+    parser = setup_parser()
+    args = parser.parse_args()
+     
     # create data dictionary of command to function mapping
     command_to_function = {
         'list': list_channel,
@@ -80,10 +86,12 @@ def main():
         'transcribe_video': transcribe_video,
         'tv': transcribe_video
         }
+
     func = command_to_function.get(args.command)
     logger.debug(f"{func} args: {args}")
     if func:
         calling_func = func.__name__
+        transcriber = myTranscriber(args.model if 'model' in args else 'tiny.en')
 
         if calling_func == 'list_channel':
             func(args, transcriber)
@@ -94,6 +102,17 @@ def main():
     else:
         print(f"[main] {colored(f'unknown command: ','red')}{args.command}")
         parser.print_help()   
+        sys.exit(1)
+
+def list_channel(args, transcriber):
+        transcriber.get_metadata.get_channel_list(args.channel_url, args.channel_name, transcriber)
+
+def transcribe_channel(args, transcriber):
+        transcriber.transcribe_channel(args.channel_url, args.channel_name, transcriber)
+
+def transcribe_video(args, transcriber):
+        transcriber.transcribe_youtube_video(args.video_url)        
+
 
 if __name__ == "__main__":
     main()
