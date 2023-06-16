@@ -29,10 +29,14 @@ class getMetadata:
                 logger.info(f"{func} Getting channel list for {channel_name}...")
                 info_dict = downloader.extract_info(channel_url, download=False)
                 # save the urls in a txt file
-                filename = f'data/channel_list_urls-[{channel_name}].txt' 
+                filename = f'data/channel_list_urls-[{channel_name}].txt'
                 logger.info(f"{func} Saving channel list urls to {filename}")
-                json_string = json.dumps(info_dict, indent=4)
-                logger.debug(f"{func} json_string: {json_string}")
+                # DEBUG verbose output - only needed deepdive debugging
+                #json_filename = f'data/json-dump-[{channel_name}].txt' # DEBUG 
+                #json_string = json.dumps(info_dict, indent=4)
+                #logger.debug(f"{func} json_string: {json_string}")
+                #with open(json_filename, 'w') as f:
+                #    f.write(json_string)
                 transcriber.output[channel_url] = filename
                 logger.debug(f"output: {transcriber.output}")
                 with open(filename, 'w') as f:
@@ -67,6 +71,9 @@ class getMetadata:
         try:
             with youtube_dl.YoutubeDL(options) as downloader:
                 info_dict = downloader.extract_info(url, download=False)
+                duration = info_dict.get('duration')
+                if (duration is None):
+                    raise ValueError (f"{func} Error occurred during metadata retrieval for {url} no duration for video - url is likely not a video url")
                 metadata = {
                     'url': url,
                     'title': info_dict.get('title'),
@@ -91,6 +98,7 @@ class getMetadata:
             handle_error(e, func, msg, transcriber.errors, key)
             return None
         logger.info(f"{func} Done getting video metadata")
+        logger.debug(f"{func} metadata: {metadata}")
         return metadata
     
 class downloadSource:
@@ -154,7 +162,7 @@ class myTextSplitter:
         sentences = re.split("(?<=[.!?]) +", self.text['text'])
         logger.info(f"{func} Done splitting into sentences (n={len(sentences)})")
         return sentences
-
+    
     def save_as_txt(self, filename, metadata, model, transcriber):
         func = '[save_as_txt]'
         logger.info(f"{func} Formatting metadata and transcription text")
@@ -193,6 +201,7 @@ class myTranscriber:
         self.processed_videos = set()
         self._load_processed_videos()
     
+    # loads lists of processed videos from past runs
     def _load_processed_videos(self):
         if not os.path.isfile(self.processed_videos_filename):
             open(self.processed_videos_filename, 'w').close()
@@ -247,35 +256,36 @@ class myTranscriber:
                 if response.lower() != 'y':
                     logger.info(f"{func} Skipping already processed video")
                     return f"Skipped video: {url}"
-            
-            logger.info(f"{func} downloading audio...{url}")
-            filename = self.download_source.save_to_mp3(url, self)
-            logger.debug(f"{func} filename: {filename}")
-            if(filename is None):
-                # TODO: add url to error dictionary
-                return None
-            logger.info(f"{func} transcribing audio...using model: {colored(self.model_size, 'blue')}")
-            text = self.model.transcribe(filename, fp16=fp16)
-            logger.info(f"{func} Done transcribing audio")
-            logger.debug(f"{func} Transcribed text[:40]: {text['text'][:40]}")
-            splitter = myTextSplitter(text, n)
-            
-            # Get video metadata and append to dataframe
+                        
+            # Get video metadata
             logger.info(f"{func} lookup url in saved metadata")
             metadata = self.get_metadata.channel_metadata.get(url, None)
             if metadata is None:
                 logger.info(f"{func} saved meta not found - retrieving metadata from source")
                 metadata = self.get_metadata.get_video_metadata(url, self)
+            if metadata is None:
+                raise ValueError(f"{func} unable to retrieve metadata for video - check url") 
             date = metadata['upload_date']  
             id = metadata['id']
             title = metadata['title'].replace(' ', '_').replace('/', '-')
             filepath = f'data/output/{prefix}-{date}-{title}-[{id}]-[model-{self.model_size}].txt'  
 
+            logger.info(f"{func} downloading audio...{url}")
+            filename = self.download_source.save_to_mp3(url, self)
+            logger.debug(f"{func} filename: {filename}")
+            if(filename is None):
+                raise ValueError(f"{func} unable to download audio file - check url")
+            logger.info(f"{func} transcribing audio...using model: {colored(self.model_size, 'blue')}")
+            text = self.model.transcribe(filename, fp16=fp16)
+            logger.info(f"{func} Done transcribing audio")
+            logger.debug(f"{func} Transcribed text[:40]: {text['text'][:40]}")
+            splitter = myTextSplitter(text, n)
+
+
             # Save the modified dataframe as txt file
             processed_file = splitter.save_as_txt(filepath, metadata, self.model_size, self)
             if(processed_file is None):
-                #TODO: add url to error dictionary
-                return None
+                raise ValueError(f"{func} unable to save transcription to file - check url")
             else:
                 logger.info(f"{func} Done transcribing video and saving to file")
                 with open(self.processed_videos_filename, 'a') as file:
